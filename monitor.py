@@ -67,14 +67,14 @@ def save_hash(hash_value: str) -> None:
 def send_emails(url: str) -> None:
     recipients = [addr.strip() for addr in EMAIL_RECEIVERS.split(",") if addr.strip()]
 
-    subject = f"[Monitor] La page a changé : {url}"
+    subject = f"[Monitor] Nouvel AO : {url}"
     body = f"""Bonjour,
 
-La page suivante a été mise à jour :
+Il y a possiblement un nouvel AO, alors sois un gros Bode comme Robin et sois le premier à le choper.
 
   {url}
 
-Cliquez sur le lien pour voir les changements.
+Be Quick
 
 ---
 Bot de surveillance automatique
