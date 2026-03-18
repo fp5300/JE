@@ -1,5 +1,4 @@
 import hashlib
-import json
 import os
 import smtplib
 import sys
@@ -13,25 +12,24 @@ from bs4 import BeautifulSoup
 # Configuration (via variables d'environnement)
 # ──────────────────────────────────────────────
 
-URL_TO_WATCH   = os.environ.get("URL_TO_WATCH",   "https://example.com")
-EMAIL_SENDER   = os.environ.get("EMAIL_SENDER",   "")
-EMAIL_PASSWORD = os.environ.get("EMAIL_PASSWORD", "")
-EMAIL_RECEIVER = os.environ.get("EMAIL_RECEIVER", "")
-HASH_FILE      = "last_hash.txt"   # fichier local où on stocke le hash précédent
+URL_TO_WATCH    = os.environ.get("URL_TO_WATCH",    "https://example.com")
+EMAIL_SENDER    = os.environ.get("EMAIL_SENDER",    "")
+EMAIL_PASSWORD  = os.environ.get("EMAIL_PASSWORD",  "")
+# Plusieurs adresses séparées par une virgule : "a@gmail.com,b@gmail.com"
+EMAIL_RECEIVERS = os.environ.get("EMAIL_RECEIVERS", "")
+
+HASH_FILE = "last_hash.txt"
 
 # ──────────────────────────────────────────────
 # Étape 1 : Télécharger et nettoyer la page
 # ──────────────────────────────────────────────
 
 def fetch_page_content(url: str) -> str:
-    """Télécharge la page et retourne le texte visible (sans balises HTML)."""
     headers = {"User-Agent": "Mozilla/5.0 (website-monitor-bot/1.0)"}
     response = requests.get(url, headers=headers, timeout=15)
     response.raise_for_status()
 
     soup = BeautifulSoup(response.text, "html.parser")
-
-    # Supprime les scripts, styles et balises invisibles
     for tag in soup(["script", "style", "meta", "link", "noscript"]):
         tag.decompose()
 
@@ -39,7 +37,7 @@ def fetch_page_content(url: str) -> str:
 
 
 # ──────────────────────────────────────────────
-# Étape 2 : Calculer le hash MD5 du contenu
+# Étape 2 : Hash MD5 du contenu
 # ──────────────────────────────────────────────
 
 def compute_hash(text: str) -> str:
@@ -63,10 +61,12 @@ def save_hash(hash_value: str) -> None:
 
 
 # ──────────────────────────────────────────────
-# Étape 4 : Envoyer un email via Gmail SMTP
+# Étape 4 : Envoi email à plusieurs destinataires
 # ──────────────────────────────────────────────
 
-def send_email(url: str) -> None:
+def send_emails(url: str) -> None:
+    recipients = [addr.strip() for addr in EMAIL_RECEIVERS.split(",") if addr.strip()]
+
     subject = f"[Monitor] La page a changé : {url}"
     body = f"""Bonjour,
 
@@ -82,15 +82,15 @@ Bot de surveillance automatique
 
     msg = MIMEMultipart()
     msg["From"]    = EMAIL_SENDER
-    msg["To"]      = EMAIL_RECEIVER
+    msg["To"]      = ", ".join(recipients)
     msg["Subject"] = subject
     msg.attach(MIMEText(body, "plain"))
 
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
         server.login(EMAIL_SENDER, EMAIL_PASSWORD)
-        server.sendmail(EMAIL_SENDER, EMAIL_RECEIVER, msg.as_string())
+        server.sendmail(EMAIL_SENDER, recipients, msg.as_string())
 
-    print("✉️  Email envoyé avec succès.")
+    print(f"✉️  Email envoyé à {len(recipients)} destinataire(s) : {', '.join(recipients)}")
 
 
 # ──────────────────────────────────────────────
@@ -100,22 +100,18 @@ Bot de surveillance automatique
 def main():
     print(f"🔍 Surveillance de : {URL_TO_WATCH}")
 
-    # Téléchargement
     try:
         content = fetch_page_content(URL_TO_WATCH)
     except Exception as e:
         print(f"❌ Impossible de télécharger la page : {e}")
         sys.exit(1)
 
-    # Hash actuel
     current_hash = compute_hash(content)
-    print(f"📌 Hash actuel  : {current_hash}")
+    print(f"📌 Hash actuel    : {current_hash}")
 
-    # Hash précédent
     previous_hash = load_previous_hash()
     print(f"📂 Hash précédent : {previous_hash or 'aucun (première exécution)'}")
 
-    # Comparaison
     if previous_hash is None:
         print("ℹ️  Première exécution — hash sauvegardé, aucun email envoyé.")
         save_hash(current_hash)
@@ -124,7 +120,7 @@ def main():
         print("🆕 Changement détecté !")
         save_hash(current_hash)
         try:
-            send_email(URL_TO_WATCH)
+            send_emails(URL_TO_WATCH)
         except Exception as e:
             print(f"❌ Échec de l'envoi d'email : {e}")
             sys.exit(1)
