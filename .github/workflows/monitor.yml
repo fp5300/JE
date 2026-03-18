@@ -2,39 +2,55 @@ name: Website Monitor
 
 on:
   schedule:
-    # Toutes les 6 heures (modifiable — syntaxe cron)
-    # Format : minute heure jour mois jour_semaine
-    - cron: "0 */6 * * *"
-
-  # Permet aussi de lancer manuellement depuis l'onglet Actions
+    - cron: "*/5 * * * *"
   workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   check:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Récupère le code du repo
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Installe Python
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      # 3. Cache des dépendances (accélère les runs suivants)
       - name: Cache pip dependencies
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
 
-      # 4. Installe les dépendances
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Restore previous hash
+        uses: actions/cache@v4
+        with:
+          path: last_hash.txt
+          key: last-hash-${{ github.ref }}-${{ github.run_id }}
+          restore-keys: |
+            last-hash-${{ github.ref }}-
+
+      - name: Run monitor
+        env:
+          URL_TO_WATCH:    ${{ secrets.URL_TO_WATCH }}
+          EMAIL_SENDER:    ${{ secrets.EMAIL_SENDER }}
+          EMAIL_PASSWORD:  ${{ secrets.EMAIL_PASSWORD }}
+          EMAIL_RECEIVERS: ${{ secrets.EMAIL_RECEIVERS }}
+        run: python monitor.py
+
+      - name: Save updated hash
+        uses: actions/cache@v4
+        with:
+          path: last_hash.txt
+          key: last-hash-${{ github.ref }}-${{ github.run_id }}
       # 5. Restaure le hash de la run précédente (cache entre runs)
       - name: Restore previous hash
         uses: actions/cache@v4
